@@ -1,0 +1,14 @@
+services:
+  facematch:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - facematch-data:/app/data
+    environment:
+      FACEMATCH_STORE: folder          # or sqlite
+      FACEMATCH_EMBEDDER: opencv_sface # or arcface (add models first)
+    restart: unless-stopped
+
+volumes:
+  facematch-data:

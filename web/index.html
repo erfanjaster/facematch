@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FaceMatch — fast face search</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%2334d399'/%3E%3Cpath d='M6 27c1.5-6 6-8 10-8s8.5 2 10 8' fill='%2334d399'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#0f172a"/>
+      <circle cx="16" cy="13" r="6" fill="#34d399"/>
+      <path d="M6 27c1.5-6 6-8 10-8s8.5 2 10 8" fill="#34d399"/>
+      <rect x="4.5" y="4.5" width="6" height="2" rx="1" fill="#34d399"/>
+      <rect x="4.5" y="4.5" width="2" height="6" rx="1" fill="#34d399"/>
+      <rect x="21.5" y="4.5" width="6" height="2" rx="1" fill="#34d399"/>
+      <rect x="25.5" y="4.5" width="2" height="6" rx="1" fill="#34d399"/>
+    </svg>
+    <div>
+      <h1>FaceMatch</h1>
+      <span class="tagline">give a photo &rarr; find the <em>face</em> in your database, fast</span>
+    </div>
+  </div>
+  <div class="chips" id="status-chips"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="search" class="active">Search</button>
+  <button data-tab="enroll">Enroll</button>
+  <button data-tab="gallery">Gallery</button>
+  <button data-tab="database">Database</button>
+  <button data-tab="bench">Benchmarks</button>
+</nav>
+
+<main>
+  <!-- ============================================================ SEARCH -->
+  <section id="tab-search" class="panel active">
+    <div class="cols">
+      <div class="col left">
+        <div class="dropzone" id="search-drop">
+          <input type="file" id="search-file" accept="image/*" hidden />
+          <div class="dz-inner">
+            <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+            <p><strong>Drop a photo</strong>, click, or paste (Ctrl+V)</p>
+            <span>any jpg / png / webp &mdash; faces are detected automatically</span>
+          </div>
+        </div>
+        <div class="preview-wrap hidden" id="search-preview-wrap">
+          <canvas id="search-canvas"></canvas>
+        </div>
+        <div class="controls">
+          <label>threshold
+            <input type="range" id="search-threshold" min="0" max="1" step="0.01" />
+            <output id="search-threshold-out"></output>
+          </label>
+          <label>top-k
+            <select id="search-topk">
+              <option>1</option><option selected>5</option><option>10</option><option>20</option>
+            </select>
+          </label>
+          <button class="primary" id="search-btn" disabled>Search face</button>
+        </div>
+        <div class="timings" id="search-timings"></div>
+      </div>
+      <div class="col right">
+        <div id="search-results" class="results">
+          <div class="empty">Results appear here. Every detected face gets its own verdict &mdash;
+          matching is done on the <em>face embedding</em>, so a totally different photo of the same
+          person still matches.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ ENROLL -->
+  <section id="tab-enroll" class="panel">
+    <div class="cols">
+      <div class="col left">
+        <div class="field-row">
+          <label for="enroll-person">Person</label>
+          <input id="enroll-person" list="person-names" placeholder="e.g. Sara Karimi" autocomplete="off" />
+          <datalist id="person-names"></datalist>
+          <label class="chk"><input type="checkbox" id="enroll-create" checked /> create if new</label>
+        </div>
+        <div class="dropzone" id="enroll-drop">
+          <input type="file" id="enroll-file" accept="image/*" multiple hidden />
+          <div class="dz-inner">
+            <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+            <p><strong>Add photos</strong> of this person (multiple files ok)</p>
+            <span>each detected face becomes a searchable record</span>
+          </div>
+        </div>
+      </div>
+      <div class="col right">
+        <h3>Enrollment queue</h3>
+        <div id="enroll-log" class="log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== GALLERY -->
+  <section id="tab-gallery" class="panel">
+    <div class="cols">
+      <div class="col left narrow">
+        <h3>People</h3>
+        <div id="person-list" class="person-list"></div>
+      </div>
+      <div class="col right">
+        <div id="face-grid" class="face-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== DATABASE -->
+  <section id="tab-database" class="panel">
+    <div class="cards">
+      <div class="card" id="db-health"><h3>Storage</h3><pre></pre></div>
+      <div class="card" id="db-index"><h3>Vector index</h3><pre></pre></div>
+      <div class="card" id="db-embedder"><h3>Embedding backend</h3><pre></pre></div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <h3>Maintenance</h3>
+        <div class="btn-row">
+          <button id="btn-reindex">Rebuild index</button>
+          <button id="btn-export">Export database (.zip)</button>
+          <label class="file-btn">Import .zip<input type="file" id="import-file" accept=".zip" hidden /></label>
+        </div>
+        <div class="field-row">
+          <input id="ingest-path" placeholder="/path/to/folder (sub-folder per person)" />
+          <button id="btn-ingest">Ingest folder</button>
+        </div>
+        <pre id="db-admin-out" class="out"></pre>
+      </div>
+      <div class="card">
+        <h3>Adapters (pluggable)</h3>
+        <div id="adapter-list" class="adapters"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= BENCH -->
+  <section id="tab-bench" class="panel">
+    <div class="card wide">
+      <h3>Search latency probe</h3>
+      <p class="muted">Synthetic vectors (same dimensionality as the active embedder) are indexed and
+      queried so you can watch search cost stay flat as the gallery grows. Real per-request timings are
+      shown under the Search tab after every query.</p>
+      <div class="field-row">
+        <input id="bench-sizes" value="1000,10000,100000" />
+        <label>queries <input id="bench-iters" type="number" value="200" min="10" max="2000" /></label>
+        <button id="btn-bench" class="primary">Run benchmark</button>
+      </div>
+      <pre id="bench-out" class="out"></pre>
+    </div>
+  </section>
+</main>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <img id="modal-img" alt="face" />
+    <div id="modal-meta" class="modal-meta"></div>
+  </div>
+</div>
+
+<footer>
+  <span>FaceMatch v0.1 &mdash; pluggable face search engine</span>
+  <span class="muted">faces are matched by embedding, never by pixel-comparing photos</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
